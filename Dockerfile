@@ -14,7 +14,7 @@ FROM "node:${baseimage_tag}"
 MAINTAINER Bruno Willenborg, Chair of Geoinformatics, Technical University of Munich (TUM) <b.willenborg@tum.de>
 
 # Setup 3DCityDB Web Map Client ###############################################
-ARG webmapclient_version='v1.4.0'
+ARG webmapclient_version='master'
 RUN set -x \
   && BUILD_PACKAGES='ca-certificates git' \
   && apt-get update && apt-get install -y --no-install-recommends $BUILD_PACKAGES \

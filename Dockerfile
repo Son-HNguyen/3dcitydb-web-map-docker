@@ -38,5 +38,29 @@ RUN set -x \
 
 VOLUME /var/www/
 USER node
-EXPOSE 8000
+EXPOSE 8000 137/udp 138/udp 139 445
 CMD [ "node", "server.js", "--public"]
+
+# Install Samba
+WORKDIR /
+USER root
+RUN apt-get update && apt-get upgrade -y
+RUN apt-get install -y samba-common samba
+RUN adduser --quiet --disabled-password --shell /bin/bash --home /home/testusr --gecos "User" testusr && \
+        echo 'testpw' | tee - | smbpasswd -a -s testusr && \
+        chmod -R 778 /var/www/
+#       cp /etc/samba/smb.conf /etc/samba/smb.conf.bak && \
+#       echo "printing = bsd printcap name = /dev/null" >> /etc/samba/smb.conf
+#       echo "[smb_shared]" >> /etc/samba/smb.conf && \
+#       echo "\tpath = /var/www/" >> /etc/samba/smb.conf && \
+#       echo "\tavailable = yes" >> /etc/samba/smb.conf && \
+#       echo "\tvalid users = testusr" >> /etc/samba/smb.conf && \
+#       echo "\tread only = no" >> /etc/samba/smb.conf && \
+#       echo "\tbrowsable = yes" >> /etc/samba/smb.conf && \
+#       echo "\tpublic = yes" >> /etc/samba/smb.conf && \
+#       echo "\twritable = yes" >> /etc/samba/smb.conf
+RUN service smbd restart
+
+#EXPOSE 137/udp 138/udp 139 445
+COPY samba.sh /samba.sh
+ENTRYPOINT [ "/samba.sh" ]

@@ -14,9 +14,16 @@
 #  ORGANIZATION:
 #       CREATED: 09/28/2014 12:11
 #      REVISION: 1.0
+#
+#   MODIFIED BY: Son H. Nguyen (son.nguyen@tum.de)
+#   MODIFIED ON: 04/03/2018
 #===============================================================================
 
 set -o nounset                              # Treat unset variables as an error
+
+# Run NodeJs
+nohup node server.js --public > output.log &
+echo "NodeJS Server started."
 
 ### charmap: setup character mapping for file/directory names
 # Arguments:

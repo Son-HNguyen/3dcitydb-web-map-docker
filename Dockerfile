@@ -2,9 +2,7 @@
 #   Official website    https://www.3dcitydb.net
 #   GitHub              https://github.com/3dcitydb/3dcitydb-web-map
 ###############################################################################
-# Base image
-ARG baseimage_tag='9'
-FROM "node:${baseimage_tag}"
+FROM node:alpine
 # Maintainer ##################################################################
 #   Bruno Willenborg
 #   Chair of Geoinformatics
@@ -17,50 +15,73 @@ MAINTAINER Bruno Willenborg, Chair of Geoinformatics, Technical University of Mu
 ARG webmapclient_version='v1.4.0'
 RUN set -x \
   && BUILD_PACKAGES='ca-certificates git' \
-  && apt-get update && apt-get install -y --no-install-recommends $BUILD_PACKAGES \
+  && apk update && apk add --no-cache --no-progress $BUILD_PACKAGES \
   && git clone -b "${webmapclient_version}" --depth 1 https://github.com/3dcitydb/3dcitydb-web-map.git /var/www \
   && cd /var/www \
   && rm -rf ./.git ./.gitignore ./LICENSE ./README.md ./build.xml \
-     ./node_modules ./server.js ./theme \  
+     ./node_modules ./server.js ./theme \
   && mkdir -p /var/www/data \
-  && apt-get purge -y --auto-remove $BUILD_PACKAGES \
+  && apk del $BUILD_PACKAGES \
   && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /var/www/  
+WORKDIR /var/www/
 COPY package.json ./
 COPY html/* ./
 COPY server.js ./
 RUN set -x \
   && npm install --production
 
-RUN set -x \
-  && chown -R node:node /var/www/
+#RUN set -x \
+#  && chown -R node:node /var/www/
 
 VOLUME /var/www/
-USER node
+#USER node
+#EXPOSE 8000
+#CMD [ "node", "server.js", "--public"]
+
+# Install Samba based on dperson/samba
+# https://github.com/dperson/samba
+RUN apk --no-cache --no-progress upgrade && \
+    apk --no-cache --no-progress add bash samba shadow && \
+    adduser -D -G users -H -S -g 'Samba User' -h /tmp smbuser && \
+    file="/etc/samba/smb.conf" && \
+    sed -i 's|^;* *\(log file = \).*|   \1/dev/stdout|' $file && \
+    sed -i 's|^;* *\(load printers = \).*|   \1no|' $file && \
+    sed -i 's|^;* *\(printcap name = \).*|   \1/dev/null|' $file && \
+    sed -i 's|^;* *\(printing = \).*|   \1bsd|' $file && \
+    sed -i 's|^;* *\(unix password sync = \).*|   \1no|' $file && \
+    sed -i 's|^;* *\(preserve case = \).*|   \1yes|' $file && \
+    sed -i 's|^;* *\(short preserve case = \).*|   \1yes|' $file && \
+    sed -i 's|^;* *\(default case = \).*|   \1lower|' $file && \
+    sed -i '/Share Definitions/,$d' $file && \
+    echo '   pam password change = yes' >>$file && \
+    echo '   map to guest = bad user' >>$file && \
+    echo '   usershare allow guests = yes' >>$file && \
+    echo '   create mask = 0664' >>$file && \
+    echo '   force create mode = 0664' >>$file && \
+    echo '   directory mask = 0775' >>$file && \
+    echo '   force directory mode = 0775' >>$file && \
+    echo '   force user = smbuser' >>$file && \
+    echo '   force group = users' >>$file && \
+    echo '   follow symlinks = yes' >>$file && \
+    echo '   load printers = no' >>$file && \
+    echo '   printing = bsd' >>$file && \
+    echo '   printcap name = /dev/null' >>$file && \
+    echo '   disable spoolss = yes' >>$file && \
+    echo '   socket options = TCP_NODELAY' >>$file && \
+    echo '   strict locking = no' >>$file && \
+    echo '   vfs objects = recycle' >>$file && \
+    echo '   recycle:keeptree = yes' >>$file && \
+    echo '   recycle:versions = yes' >>$file && \
+    echo '   min protocol = SMB2' >>$file && \
+    echo '' >>$file && \
+    rm -rf /tmp/*
+
+COPY samba.sh /usr/bin/
+
 EXPOSE 8000 137/udp 138/udp 139 445
-CMD [ "node", "server.js", "--public"]
 
-# Install Samba
-WORKDIR /
-USER root
-RUN apt-get update && apt-get upgrade -y
-RUN apt-get install -y samba-common samba
-RUN adduser --quiet --disabled-password --shell /bin/bash --home /home/testusr --gecos "User" testusr && \
-        echo 'testpw' | tee - | smbpasswd -a -s testusr && \
-        chmod -R 778 /var/www/
-#       cp /etc/samba/smb.conf /etc/samba/smb.conf.bak && \
-#       echo "printing = bsd printcap name = /dev/null" >> /etc/samba/smb.conf
-#       echo "[smb_shared]" >> /etc/samba/smb.conf && \
-#       echo "\tpath = /var/www/" >> /etc/samba/smb.conf && \
-#       echo "\tavailable = yes" >> /etc/samba/smb.conf && \
-#       echo "\tvalid users = testusr" >> /etc/samba/smb.conf && \
-#       echo "\tread only = no" >> /etc/samba/smb.conf && \
-#       echo "\tbrowsable = yes" >> /etc/samba/smb.conf && \
-#       echo "\tpublic = yes" >> /etc/samba/smb.conf && \
-#       echo "\twritable = yes" >> /etc/samba/smb.conf
-RUN service smbd restart
+#HEALTHCHECK --interval=60s --timeout=15s \
+#             CMD smbclient -L '\\localhost\' -U 'guest%' -m SMB3
 
-#EXPOSE 137/udp 138/udp 139 445
-COPY samba.sh /samba.sh
-ENTRYPOINT [ "/samba.sh" ]
+ENTRYPOINT [ "samba.sh" ]
